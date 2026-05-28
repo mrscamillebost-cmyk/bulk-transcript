@@ -1,5 +1,5 @@
 from pathlib import Path
-
+from transcriber import fetch_youtube_captions
 INPUT_FILE = Path("input_urls.txt")
 OUTPUT_DIR = Path("transcripts")
 COMBINED_FILE = OUTPUT_DIR / "combined_transcripts.txt"
@@ -66,7 +66,7 @@ def main():
 
     for i, url in enumerate(urls, start=1):
         try:
-            transcript_text = placeholder_transcript(url)
+            transcript_text = fetch_youtube_captions(url)
             save_individual_transcript(i, transcript_text)
             append_combined_transcript(url, transcript_text)
             append_status(url, "ok", "placeholder only")
