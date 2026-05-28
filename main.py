@@ -20,10 +20,12 @@ def read_input_lines():
     return INPUT_FILE.read_text(encoding="utf-8").splitlines()
 
 
-def build_video_section(title, url, transcript_text):
+def build_video_section(title, url, transcript_text, method):
     return f"""# {title}
 
 Source URL: {url}
+
+Transcript source: {method}
 
 {transcript_text}
 """
@@ -38,7 +40,6 @@ def main():
         return
 
     urls = get_youtube_urls_from_input(input_lines)
-
     if not urls:
         print("No valid YouTube video URLs found.")
         return
@@ -48,10 +49,10 @@ def main():
     for url in urls:
         try:
             print(f"Starting: {url}")
-            title, raw_transcript = transcribe_youtube_url(url)
+            title, raw_transcript, method = transcribe_youtube_url(url)
             cleaned_transcript = clean_transcript_text(raw_transcript)
 
-            section = build_video_section(title, url, cleaned_transcript)
+            section = build_video_section(title, url, cleaned_transcript, method)
 
             with COMBINED_FILE.open("a", encoding="utf-8") as f:
                 f.write(section)
