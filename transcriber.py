@@ -1,9 +1,19 @@
-import re
-import urllib.request
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlparse
 
-from youtube_transcript_api import YouTubeTranscriptApi
+from faster_whisper import WhisperModel
 from yt_dlp import YoutubeDL
+
+
+_MODEL = None
+
+
+def get_model():
+    global _MODEL
+    if _MODEL is None:
+        _MODEL = WhisperModel("base", device="cpu", compute_type="int8")
+    return _MODEL
 
 
 def extract_video_id(url: str) -> str:
@@ -20,97 +30,57 @@ def extract_video_id(url: str) -> str:
     raise ValueError(f"Could not extract video id from URL: {url}")
 
 
-def clean_vtt_text(vtt_text: str) -> str:
-    lines = vtt_text.splitlines()
-    cleaned = []
-
-    for line in lines:
-        line = line.strip()
-
-        if not line:
-            continue
-        if line == "WEBVTT":
-            continue
-        if "-->" in line:
-            continue
-        if re.match(r"^\d+$", line):
-            continue
-
-        line = re.sub(r"<[^>]+>", "", line)
-        line = line.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-
-        if cleaned and cleaned[-1] == line:
-            continue
-
-        cleaned.append(line)
-
-    return "\n".join(cleaned).strip()
+def clean_youtube_url(url: str) -> str:
+    video_id = extract_video_id(url)
+    return f"https://www.youtube.com/watch?v={video_id}"
 
 
-def fetch_with_youtube_transcript_api(video_id: str) -> str:
-    transcript = YouTubeTranscriptApi.get_transcript(video_id)
-    parts = [item["text"].strip() for item in transcript if item.get("text")]
-    text = "\n".join(parts).strip()
+def download_audio(url: str, work_dir: Path):
+    output_template = str(work_dir / "%(id)s.%(ext)s")
 
-    if not text:
-        raise ValueError("Transcript API returned empty text.")
-
-    return text
-
-
-def fetch_with_ytdlp(url: str) -> str:
     ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": output_template,
         "quiet": True,
-        "skip_download": True,
         "no_warnings": True,
+        "noplaylist": True,
     }
 
     with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+        info = ydl.extract_info(url, download=True)
+        downloaded_path = Path(ydl.prepare_filename(info))
+        title = info.get("title") or info.get("id") or "untitled"
 
-    subtitles = info.get("subtitles") or {}
-    automatic_captions = info.get("automatic_captions") or {}
+    if not downloaded_path.exists():
+        raise FileNotFoundError(f"Downloaded audio file not found: {downloaded_path}")
 
-    preferred_langs = ["en", "en-US", "en-GB"]
-    caption_groups = [subtitles, automatic_captions]
-
-    for group in caption_groups:
-        for lang in preferred_langs:
-            tracks = group.get(lang) or []
-            for track in tracks:
-                sub_url = track.get("url")
-                ext = track.get("ext", "")
-                if not sub_url:
-                    continue
-
-                with urllib.request.urlopen(sub_url) as response:
-                    raw = response.read().decode("utf-8", errors="ignore")
-
-                if ext == "vtt" or "WEBVTT" in raw:
-                    text = clean_vtt_text(raw)
-                else:
-                    text = raw.strip()
-
-                if text:
-                    return text
-
-    raise ValueError("No subtitles or automatic captions found via yt-dlp.")
+    return title, downloaded_path
 
 
-def fetch_youtube_captions(url: str) -> str:
-    video_id = extract_video_id(url)
+def transcribe_audio_file(audio_path: Path) -> str:
+    model = get_model()
+    segments, _info = model.transcribe(str(audio_path), beam_size=5)
 
-    first_error = None
+    parts = []
+    for segment in segments:
+        text = segment.text.strip()
+        if text:
+            parts.append(text)
 
-    try:
-        return fetch_with_youtube_transcript_api(video_id)
-    except Exception as e:
-        first_error = e
+    transcript_text = "\n".join(parts).strip()
 
-    try:
-        return fetch_with_ytdlp(url)
-    except Exception as second_error:
-        raise ValueError(
-            f"Could not fetch captions. First method failed: {first_error}. "
-            f"Second method failed: {second_error}"
-        )
+    if not transcript_text:
+        raise ValueError("Transcription returned empty text.")
+
+    return transcript_text
+
+
+def transcribe_youtube_url(url: str):
+    clean_url = clean_youtube_url(url)
+
+    with TemporaryDirectory() as tmp_dir:
+        work_dir = Path(tmp_dir)
+        title, audio_path = download_audio(clean_url, work_dir)
+        transcript_text = transcribe_audio_file(audio_path)
+
+    return title, transcript_text
