@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 from faster_whisper import WhisperModel
 from yt_dlp import YoutubeDL
+from youtube_transcript_api import YouTubeTranscriptApi
 
 _MODEL = None
 
@@ -75,7 +76,6 @@ def get_youtube_urls_from_input(lines):
         elif "youtube.com" in line or "youtu.be" in line:
             urls.append(clean_video_url(line))
 
-    # remove duplicates while keeping order
     seen = set()
     final_urls = []
     for url in urls:
@@ -84,6 +84,32 @@ def get_youtube_urls_from_input(lines):
             final_urls.append(url)
 
     return final_urls
+
+
+def get_video_title(url: str) -> str:
+    ydl_opts = {
+        "quiet": True,
+        "skip_download": True,
+        "no_warnings": True,
+        "noplaylist": True,
+    }
+
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    return info.get("title") or extract_video_id(url)
+
+
+def fetch_captions(url: str):
+    video_id = extract_video_id(url)
+    transcript = YouTubeTranscriptApi.get_transcript(video_id)
+    parts = [item["text"].strip() for item in transcript if item.get("text")]
+    text = "\n".join(parts).strip()
+
+    if not text:
+        raise ValueError("Empty captions transcript.")
+
+    return text
 
 
 def download_audio(url: str, work_dir: Path):
@@ -128,10 +154,17 @@ def transcribe_audio_file(audio_path: Path) -> str:
 
 def transcribe_youtube_url(url: str):
     clean_url = clean_video_url(url)
+    title = get_video_title(clean_url)
+
+    try:
+        transcript_text = fetch_captions(clean_url)
+        return title, transcript_text, "captions"
+    except Exception:
+        pass
 
     with TemporaryDirectory() as tmp_dir:
         work_dir = Path(tmp_dir)
         title, audio_path = download_audio(clean_url, work_dir)
         transcript_text = transcribe_audio_file(audio_path)
 
-    return title, transcript_text
+    return title, transcript_text, "audio fallback"
