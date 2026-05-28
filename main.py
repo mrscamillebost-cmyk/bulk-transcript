@@ -68,7 +68,7 @@ def main():
             transcript_text = fetch_youtube_captions(url)
             save_individual_transcript(i, transcript_text)
             append_combined_transcript(url, transcript_text)
-            append_status(url, "ok", "captions")
+            append_status(url, "ok", "captions fetched")
             print(f"Processed {url}")
         except Exception as e:
             append_status(url, "failed", str(e))
