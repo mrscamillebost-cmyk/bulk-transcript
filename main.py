@@ -1,5 +1,8 @@
 from pathlib import Path
+
 from transcriber import fetch_youtube_captions
+from status_utils import safe_notes
+
 INPUT_FILE = Path("input_urls.txt")
 OUTPUT_DIR = Path("transcripts")
 COMBINED_FILE = OUTPUT_DIR / "combined_transcripts.txt"
@@ -35,8 +38,8 @@ def write_status_header():
 
 def append_status(url, status, notes=""):
     with STATUS_FILE.open("a", encoding="utf-8") as f:
-        safe_notes = notes.replace(",", ";")
-        f.write(f"{url},{status},{safe_notes}\n")
+        clean_notes = safe_notes(notes)
+        f.write(f"{url},{status},{clean_notes}\n")
 
 
 def append_combined_transcript(url, transcript_text):
@@ -48,10 +51,6 @@ def append_combined_transcript(url, transcript_text):
 def save_individual_transcript(index, transcript_text):
     out_file = OUTPUT_DIR / f"transcript_{index:03d}.txt"
     out_file.write_text(transcript_text, encoding="utf-8")
-
-
-def placeholder_transcript(url):
-    return f"Transcript placeholder for: {url}"
 
 
 def main():
@@ -69,7 +68,7 @@ def main():
             transcript_text = fetch_youtube_captions(url)
             save_individual_transcript(i, transcript_text)
             append_combined_transcript(url, transcript_text)
-            append_status(url, "ok", "placeholder only")
+            append_status(url, "ok", "captions")
             print(f"Processed {url}")
         except Exception as e:
             append_status(url, "failed", str(e))
