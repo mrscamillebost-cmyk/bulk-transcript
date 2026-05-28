@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from transcript_cleanup import clean_transcript_text
-from transcriber import get_youtube_urls_from_input, transcribe_youtube_url
+from transcriber import get_youtube_urls_from_input, fetch_captions_for_url
 
 INPUT_FILE = Path("input_urls.txt")
 OUTPUT_DIR = Path("transcripts")
@@ -20,12 +20,10 @@ def read_input_lines():
     return INPUT_FILE.read_text(encoding="utf-8").splitlines()
 
 
-def build_video_section(title, url, transcript_text, method):
+def build_video_section(title, url, transcript_text):
     return f"""# {title}
 
 Source URL: {url}
-
-Transcript source: {method}
 
 {transcript_text}
 """
@@ -49,10 +47,10 @@ def main():
     for url in urls:
         try:
             print(f"Starting: {url}")
-            title, raw_transcript, method = transcribe_youtube_url(url)
+            title, raw_transcript = fetch_captions_for_url(url)
             cleaned_transcript = clean_transcript_text(raw_transcript)
 
-            section = build_video_section(title, url, cleaned_transcript, method)
+            section = build_video_section(title, url, cleaned_transcript)
 
             with COMBINED_FILE.open("a", encoding="utf-8") as f:
                 f.write(section)
@@ -60,7 +58,7 @@ def main():
 
             print(f"Finished: {title}")
         except Exception as e:
-            print(f"Failed: {url} -> {e}")
+            print(f"Skipped: {url} -> {e}")
 
     print(f"Saved: {COMBINED_FILE}")
     print("Done.")
