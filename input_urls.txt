@@ -1,1 +1,3 @@
-# paste one YouTube URL per line here
+https://www.youtube.com/watch?v=oLGI1DmFlng&list=PLRvgPSYeo0NE8DQvreJ5dFYWZiqCO2fC1&index=3
+https://www.youtube.com/watch?v=TdNLsSe1mA4&list=PLRvgPSYeo0NE8DQvreJ5dFYWZiqCO2fC1&index=2&t=247s
+https://www.youtube.com/watch?v=2sE6QFKzdw4&list=PLRvgPSYeo0NE8DQvreJ5dFYWZiqCO2fC1&index=4
