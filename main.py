@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from transcriber import fetch_youtube_captions
 from status_utils import safe_notes
+from transcriber import extract_video_id, transcribe_youtube_url
 
 INPUT_FILE = Path("input_urls.txt")
 OUTPUT_DIR = Path("transcripts")
@@ -33,23 +33,29 @@ def read_urls():
 
 def write_status_header():
     if not STATUS_FILE.exists():
-        STATUS_FILE.write_text("url,status,notes\n", encoding="utf-8")
+        STATUS_FILE.write_text("url,video_id,status,notes\n", encoding="utf-8")
 
 
-def append_status(url, status, notes=""):
+def append_status(url, video_id, status, notes=""):
     with STATUS_FILE.open("a", encoding="utf-8") as f:
         clean_notes = safe_notes(notes)
-        f.write(f"{url},{status},{clean_notes}\n")
+        f.write(f"{url},{video_id},{status},{clean_notes}\n")
 
 
-def append_combined_transcript(url, transcript_text):
+def append_combined_transcript(url, title, transcript_text):
     with COMBINED_FILE.open("a", encoding="utf-8") as f:
-        f.write(f"=== {url} ===\n")
+        f.write(f"=== {title} ===\n")
+        f.write(f"{url}\n\n")
         f.write(transcript_text.strip() + "\n\n")
 
 
-def save_individual_transcript(index, transcript_text):
-    out_file = OUTPUT_DIR / f"transcript_{index:03d}.txt"
+def save_individual_transcript(video_id, title, transcript_text):
+    safe_title = "".join(c for c in title if c.isalnum() or c in (" ", "-", "_")).strip()
+    safe_title = safe_title.replace(" ", "_")
+    if not safe_title:
+        safe_title = video_id
+
+    out_file = OUTPUT_DIR / f"{video_id}_{safe_title}.txt"
     out_file.write_text(transcript_text, encoding="utf-8")
 
 
@@ -63,15 +69,23 @@ def main():
         print("No valid YouTube URLs found in input_urls.txt")
         return
 
-    for i, url in enumerate(urls, start=1):
+    for url in urls:
         try:
-            transcript_text = fetch_youtube_captions(url)
-            save_individual_transcript(i, transcript_text)
-            append_combined_transcript(url, transcript_text)
-            append_status(url, "ok", "captions fetched")
-            print(f"Processed {url}")
+            video_id = extract_video_id(url)
         except Exception as e:
-            append_status(url, "failed", str(e))
+            append_status(url, "unknown", "failed", f"bad url: {e}")
+            print(f"Failed URL parse: {url} -> {e}")
+            continue
+
+        try:
+            print(f"Starting: {url}")
+            title, transcript_text = transcribe_youtube_url(url)
+            save_individual_transcript(video_id, title, transcript_text)
+            append_combined_transcript(url, title, transcript_text)
+            append_status(url, video_id, "ok", "audio transcribed")
+            print(f"Finished: {title}")
+        except Exception as e:
+            append_status(url, video_id, "failed", str(e))
             print(f"Failed: {url} -> {e}")
 
     print("Done.")
