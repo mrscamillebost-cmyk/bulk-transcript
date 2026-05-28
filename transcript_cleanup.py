@@ -1,13 +1,21 @@
 import re
 
 
-def looks_like_obvious_error(line: str) -> bool:
-    lower = line.lower().strip()
+def is_obvious_junk(line: str) -> bool:
+    test = line.strip().lower()
 
-    if not lower:
+    if not test:
+        return True
+    if test == "webvtt":
+        return True
+    if "-->" in test:
+        return True
+    if re.fullmatch(r"\d+", test):
+        return True
+    if re.fullmatch(r"\d{1,2}:\d{2}(:\d{2})?", test):
         return True
 
-    obvious_noise = {
+    standalone_noise = {
         "[music]",
         "music",
         "[applause]",
@@ -17,20 +25,7 @@ def looks_like_obvious_error(line: str) -> bool:
         "[noise]",
         "[background noise]",
     }
-
-    if lower in obvious_noise:
-        return True
-
-    # pure timestamps or counters
-    if re.fullmatch(r"\d+", lower):
-        return True
-    if re.fullmatch(r"\d{1,2}:\d{2}(:\d{2})?", lower):
-        return True
-
-    # clear parsing artifacts
-    if "-->" in line:
-        return True
-    if lower == "webvtt":
+    if test in standalone_noise:
         return True
 
     return False
@@ -38,44 +33,34 @@ def looks_like_obvious_error(line: str) -> bool:
 
 def normalize_line(line: str) -> str:
     line = line.strip()
-
-    # collapse repeated whitespace
     line = re.sub(r"\s+", " ", line)
-
-    # remove spaces before punctuation
     line = re.sub(r"\s+([,.;:!?])", r"\1", line)
-
     return line.strip()
 
 
 def clean_transcript_text(text: str) -> str:
     raw_lines = text.splitlines()
-    cleaned_lines = []
-
-    previous_normalized = None
+    kept_lines = []
+    previous = None
 
     for raw_line in raw_lines:
         line = normalize_line(raw_line)
 
-        if looks_like_obvious_error(line):
+        if is_obvious_junk(line):
             continue
 
-        # remove obvious adjacent duplicates only
-        if previous_normalized and line.lower() == previous_normalized.lower():
+        if previous and line.lower() == previous.lower():
             continue
 
-        cleaned_lines.append(line)
-        previous_normalized = line
+        kept_lines.append(line)
+        previous = line
 
-    # preserve as much wording as possible; only rebuild into readable paragraphs
     paragraphs = []
     current = []
 
-    for line in cleaned_lines:
+    for line in kept_lines:
         current.append(line)
-
-        # create a new paragraph when enough text has accumulated
-        if len(" ".join(current)) >= 900:
+        if len(" ".join(current)) >= 1200:
             paragraphs.append(" ".join(current))
             current = []
 
