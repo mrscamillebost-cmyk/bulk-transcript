@@ -49,4 +49,21 @@ def main():
         try:
             print(f"Starting: {url}")
             title, raw_transcript = transcribe_youtube_url(url)
-            cleaned_transcript
+            cleaned_transcript = clean_transcript_text(raw_transcript)
+
+            section = build_video_section(title, url, cleaned_transcript)
+
+            with COMBINED_FILE.open("a", encoding="utf-8") as f:
+                f.write(section)
+                f.write("\n\n")
+
+            print(f"Finished: {title}")
+        except Exception as e:
+            print(f"Failed: {url} -> {e}")
+
+    print(f"Saved: {COMBINED_FILE}")
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()
